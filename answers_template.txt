@@ -1,0 +1,8 @@
+# Part A answers. Fill in your own roll number and the secrets you recover.
+# Format is key = value, one per line. Keep the keys exactly as below.
+roll           = 22i-1234
+flag           = FLAG{...your recovered pairing secret...}
+recovered_dh_b = 0
+cracked_pin    = ...
+# optional: hex of (greeting plaintext XOR STATUS-reply plaintext)
+nonce_xor_hex  =
