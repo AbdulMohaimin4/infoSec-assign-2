@@ -1,0 +1,25 @@
+# Compiled binaries and build output
+*.o
+*.exe
+smartlock/lock_server
+smartlock/hub_client
+smartlock/instance_generator
+v2_skeleton/lock_server2
+v2_skeleton/hub_client2
+v2_skeleton/selftest
+v2_skeleton/v2_attack_demo
+taskd
+selftest
+# compiled Part A exploits (sources are kept; binaries are not)
+exploits/taska1
+exploits/taska2
+exploits/taska3
+exploits/taska4
+exploits/taska5
+exploits/pincrack
+
+instance.txt
+
+# Local editor / OS noise
+*.swp
+.DS_Store
