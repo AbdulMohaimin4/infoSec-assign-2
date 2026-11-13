@@ -1,0 +1,9 @@
+# Part A answers - roll 23i-0652, section G.
+# All values recovered over the wire from a capture of my own instance, using the
+# tools in exploits/ (not read from instance.txt). Format is key = value.
+roll           = 23i-0652
+flag           = FLAG{d6a67b896adcb8f1}
+recovered_dh_b = 172296553067
+cracked_pin    = cosmic769
+# optional: hex of (greeting plaintext XOR STATUS-reply plaintext), same session
+nonce_xor_hex  = 0335282620446c382a3f2d6473180f1e1b2f0410561e
