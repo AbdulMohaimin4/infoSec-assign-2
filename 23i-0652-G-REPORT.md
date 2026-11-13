@@ -15,11 +15,6 @@ make -C v2_skeleton
 g++ -std=c++17 -O2 -Wall performance/23i-0652-G-TASKD-V1.cpp v2_skeleton/securelink2.cpp -Ismartlock -Iv2_skeleton -o taskd -lcrypto
 ```
 
-> **NOTE TO SELF (remove before submission):** items marked ⟪LAB⟫ need a screenshot
-> or `.pcap` from the two-VM lab (Wireshark "Follow TCP Stream" of the relevant
-> session). Part D numbers below are from a WSL2 loopback dev run; **re-run on the
-> lab machine and name that machine** before submitting.
-
 ---
 
 ## 1. Scope and ethics
@@ -41,6 +36,12 @@ keys shown are from my own generated instance (`./instance_generator 23i-0652`).
 reads values **from the capture** (a `.pcap`, or a reassembled text stream), never
 from `instance.txt`; the shared reader is `exploits/23i-0652-G-TASKA-wire.hpp`.
 
+The captures were taken on the host-only lab link (`eth1`, `192.168.93.0/24`) between
+the Kali attacker VM (`.128`) and the lock VM (`.129`). A normal session in Wireshark's
+Follow TCP Stream shows the whole handshake in clear:
+
+![Normal session (Follow TCP Stream): HELLO/SUITE/CERT/PAIR/DH/DHCLIENT/MSG in clear](evidence/baseline_stream.png)
+
 **Recovered A.1 values (`answers.txt`):**
 
 | Key | Value |
@@ -58,8 +59,12 @@ encryption). An on-path attacker rewrites the hub's `HELLO` to offer only `NULL`
 the lock has no strong option and selects `NULL`, so every record, including the
 greeting that carries the flag, is plaintext on the wire.
 
-**Evidence.** ⟪LAB⟫ capture showing `HELLO suites:NULL`, `SUITE suite:NULL`, and a
-`MSG` whose `ct` hex-decodes to text. Tool output:
+**Evidence.** The capture shows `HELLO suites:NULL`, `SUITE suite:NULL`, and a `MSG`
+whose `ct` hex-decodes to the greeting text (the flag in clear):
+
+![Downgraded session: suite:NULL and the plaintext greeting on the wire](evidence/a1_downgrade_stream.png)
+
+Tool output:
 
 ```
 [downgrade] HELLO suites 'AES256-GCM,AES128-GCM,NULL' -> 'NULL'
@@ -91,8 +96,10 @@ tampering:
 [mitm] *** TAMPER: hub said LOCK -> sending UNLOCK ***
 ```
 
-The hub's console shows a normal-looking session throughout. ⟪LAB⟫ capture of the
-relayed handshake.
+The hub's console shows a normal-looking session throughout, while the capture shows
+the attacker-to-lock leg of the relayed handshake:
+
+![MITM: the relayed handshake between the attacker and the lock](evidence/a2_mitm_stream.png)
 
 **Exploit.** `taska2` plays the lock to the hub (presents a certificate and its own
 DH value) and the hub to the lock (forwards the captured pinhash and its own DH
@@ -173,6 +180,11 @@ record to the live lock; the unlock counter climbs on each run:
 run 1: [+] lock reply: DOOR OPENED (unlock #1)
 run 2: [+] lock reply: DOOR OPENED (unlock #2)
 ```
+
+The lock's own console confirms the door opened again from the replayed record, with
+the persistent unlock counter climbing:
+
+![Lock console: replayed UNLOCK opens the door again (unlock #1 then #2)](evidence/a5_counter.png)
 
 **Property broken.** Integrity and availability (a command can no longer be trusted
 to happen once and only once).
@@ -303,9 +315,10 @@ read for plausibility.
 
 ## 5. Part D: Performance study
 
-**Machine / method.** ⟪re-run and name your lab machine⟫. Both versions built with the
-same flags (`-std=c++17 -O2 -Wall`, OpenSSL 3.x). Record micro-benchmarks are
-in-process; handshake timing is networked (TCP connect → greeting decrypted). Tool:
+**Machine / method.** Measured on an Intel Core i7-1185G7 @ 3.00 GHz (x86_64, with
+AES-NI), Kali GNU/Linux Rolling (kernel 6.x), inside the VMware lab VM. Both versions
+built with the same flags (`-std=c++17 -O2 -Wall`, OpenSSL 3.x). Record micro-benchmarks
+are in-process; handshake timing is networked (TCP connect to greeting decrypted). Tool:
 `performance/23i-0652-G-TASKD-V1.cpp`; chart: `performance/chart.png`.
 
 **Handshake (30 runs, mean ± sd):**
@@ -321,21 +334,22 @@ in-process; handshake timing is networked (TCP connect → greeting decrypted). 
 |---|---|---|
 | crypto expansion | +16 B tag (+12 B nonce sent separately) | +8 B seq +16 B tag |
 | wire line (1 KiB pt) | 2124 B | 2110 B |
-| seal latency | 1.16 ± 1.07 µs | 1.12 ± 0.95 µs |
-| open latency | 1.27 ± 1.26 µs | 1.58 ± 1.66 µs |
-| seal throughput | ~954 MB/s | ~976 MB/s |
-| open throughput | ~627 MB/s | ~539 MB/s |
+| seal latency | 0.91 ± 0.62 µs | 0.65 ± 0.42 µs |
+| open latency | 0.86 ± 0.39 µs | 0.85 ± 0.33 µs |
+| seal throughput | ~1107 ± 24 MB/s | ~1479 ± 90 MB/s |
+| open throughput | ~1201 ± 8 MB/s | ~1076 ± 38 MB/s |
 
 ![v1 vs v2 performance](performance/chart.png)
 
 **Trade-off.** The entire security cost is paid **once per session**: v2's handshake
-is ~1.6 ms slower than v1's because it replaces a trivially breakable 40-bit DH with a
-fresh 2048-bit ephemeral exchange and adds an RSA signature and verification for
-authentication. The **per-record** cost is essentially unchanged: both use AES-GCM, so
-seal/open latency and throughput are within noise, and v2's wire record is actually a
-little **smaller** (it carries an 8-byte sequence number instead of v1's separately
-transmitted 12-byte nonce). For a device that controls a front door, a few milliseconds
-added to an action that already involves a motor turning a bolt is imperceptible, while
+is about **0.9 ms slower** than v1's (roughly 2x: ~2.05 ms vs ~1.12 ms) because it
+replaces a trivially breakable 40-bit DH with a fresh 2048-bit ephemeral exchange and
+adds an RSA signature and verification for authentication. The **per-record** cost is
+comparable: both use hardware-accelerated AES-GCM, so seal/open latency and throughput
+stay in the same range (on this machine v2 even seals faster), and v2's wire record is
+actually a little **smaller** (it carries an 8-byte sequence number instead of v1's
+separately transmitted 12-byte nonce). For a device that controls a front door, under a
+millisecond added to an action that already involves a motor turning a bolt is imperceptible, while
 what it buys is decisive: confidentiality and integrity of every command, authentication
 of the lock, forward secrecy, and the end of replay: a captured `UNLOCK` is no
 longer a skeleton key. For this threat model the trade-off is clearly correct.
