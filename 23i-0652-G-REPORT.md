@@ -110,7 +110,7 @@ into `UNLOCK`.
 of the whole session).
 
 **Weakness (PIN).** `PAIR` carries the PIN as a bare, unsalted MD5 digest. The PIN
-is a dictionary word + three digits (86 words × 1000 = 86 000 candidates), so it
+is a dictionary word + three digits (86 words x 1000 = 86 000 candidates), so it
 cracks instantly offline.
 
 ```
@@ -216,8 +216,8 @@ PIN, or either party's ephemeral DH secret, and cannot break standard primitives
 |---|---|---|
 | Negotiation | `strong_suites()` offers **only** AEAD suites; `choose_suite()` picks the strongest common one and **aborts** (`""`) rather than downgrade - `NULL` is never selectable. The device **signs the transcript** `offer\|suite\|B`, so any tampering with the offered list is detected. | A1 downgrade |
 | Authentication | The hub **pins** the device's RSA public key and **verifies the certificate signature**; it rejects any key that is not the pinned one. The PIN is sent as a **salted, slow KDF** digest (Argon2id, or PBKDF2/scrypt) - never bare MD5 - and stored only in that form on the device. | A2 MITM + PIN |
-| Keying | **Fresh ephemeral 2048-bit DH** every session (RFC 3526 group) → the discrete log is infeasible and past sessions stay safe (forward secrecy). The shared secret is run through **HKDF-SHA256** to produce the record key - not used raw. The device **signs its DH value**, so a MITM cannot substitute it. | A3 keying |
-| Message protection | **AES-GCM AEAD** with a **unique nonce per record**: `nonce = 0x00000000 ‖ seqno(64-bit BE)`, so no `(key, nonce)` pair is ever reused. Separate keys per direction (HKDF `info` = `c2s` / `s2c`). | A4 nonce reuse |
+| Keying | **Fresh ephemeral 2048-bit DH** every session (RFC 3526 group) -> the discrete log is infeasible and past sessions stay safe (forward secrecy). The shared secret is run through **HKDF-SHA256** to produce the record key - not used raw. The device **signs its DH value**, so a MITM cannot substitute it. | A3 keying |
+| Message protection | **AES-GCM AEAD** with a **unique nonce per record**: `nonce = 0x00000000  ||  seqno(64-bit BE)`, so no `(key, nonce)` pair is ever reused. Separate keys per direction (HKDF `info` = `c2s` / `s2c`). | A4 nonce reuse |
 | Teardown | Each record **binds a per-direction 64-bit sequence number** as AEAD associated data and transmits it; `open_record()` **rejects** any record whose sequence number is not the expected next one, so replays and reordering fail. A `QUIT` is itself a sequence-bound, authenticated record, giving an authenticated close. | A5 replay |
 
 **PIN protection (design requirement; the scaffold does not implement it).** v2 must
@@ -226,7 +226,7 @@ stores `Argon2id(salt, PIN)` (a unique random salt, memory-hard parameters). At
 pairing the hub proves knowledge of the PIN inside the already-authenticated,
 encrypted channel (e.g. a PAKE such as SPAKE2, or at minimum sending the PIN only
 after the device is authenticated and the channel is confidential), so an attacker
-who captures the pairing cannot mount the offline dictionary attack of §2.2.
+who captures the pairing cannot mount the offline dictionary attack of section 2.2.
 
 ### 3.3 v2 handshake diagram
 
@@ -256,7 +256,7 @@ who captures the pairing cannot mount the offline dictionary attack of §2.2.
   (10)    |----- MSG rec = seal(k_c2s, seq=n, "QUIT") ------>|   authenticated close
 ```
 
-Record layout produced by `seal()`: `seqno(8 B, big-endian) ‖ ciphertext ‖ GCM tag(16 B)`.
+Record layout produced by `seal()`: `seqno(8 B, big-endian)  ||  ciphertext  ||  GCM tag(16 B)`.
 
 ---
 
@@ -267,7 +267,7 @@ The security core `securelink2.cpp` implements the module contract: `strong_suit
 
 ### 4.1 C.1: the six checks
 
-Self-test `v2_skeleton/securelink2_selftest.cpp` → **19/19 assertions pass**:
+Self-test `v2_skeleton/securelink2_selftest.cpp` -> **19/19 assertions pass**:
 
 ```
 Check 1 - suite policy: NULL-only refused; picks AES256; AES128 not NULL; empty aborts
@@ -287,7 +287,7 @@ A normal `lock_server2` / `hub_client2` session succeeds (greeting + STATUS/UNLO
 | A1 downgrade | **Fails**: `ALERT no acceptable suite`; hub aborts `no suite` | relay `--downgrade` vs `lock_server2` |
 | A2 impersonation / MITM | **Fails**: hub aborts `DH value not authenticated` (signed DH; pinned cert) | relay `--corrupt-dh` vs hub2 |
 | A3 keying recovery | **Fails**: DH `B` is a fresh **2048-bit** ephemeral, different each session (512 hex chars); no small prime, no static exponent | capture two v2 sessions |
-| A4 nonce reuse | **Fails**: every record carries a distinct sequence number / nonce (`0,1,2,…` per direction) | inspect `rec` headers |
+| A4 nonce reuse | **Fails**: every record carries a distinct sequence number / nonce (`0,1,2,...` per direction) | inspect `rec` headers |
 | A5 replay / reorder / tamper | **Fails**: the lock drops the session (`open_record` throws) | `v2_attack_demo replay/reorder/tamper` |
 
 Normal session succeeds; tampered, replayed, and reordered records are each rejected
@@ -321,12 +321,12 @@ built with the same flags (`-std=c++17 -O2 -Wall`, OpenSSL 3.x). Record micro-be
 are in-process; handshake timing is networked (TCP connect to greeting decrypted). Tool:
 `performance/23i-0652-G-TASKD-V1.cpp`; chart: `performance/chart.png`.
 
-**Handshake (30 runs, mean ± sd):**
+**Handshake (30 runs, mean +/- sd):**
 
 | Version | Handshake |
 |---|---|
-| v1 (40-bit DH, no auth) | **1.64 ± 0.55 ms** |
-| v2 (2048-bit ephemeral DH + RSA sign/verify) | **3.23 ± 0.68 ms** |
+| v1 (40-bit DH, no auth) | **1.12 +/- 0.79 ms** |
+| v2 (2048-bit ephemeral DH + RSA sign/verify) | **2.05 +/- 0.95 ms** |
 
 **Per-record overhead and throughput (1 KiB records):**
 
@@ -334,10 +334,10 @@ are in-process; handshake timing is networked (TCP connect to greeting decrypted
 |---|---|---|
 | crypto expansion | +16 B tag (+12 B nonce sent separately) | +8 B seq +16 B tag |
 | wire line (1 KiB pt) | 2124 B | 2110 B |
-| seal latency | 0.91 ± 0.62 µs | 0.65 ± 0.42 µs |
-| open latency | 0.86 ± 0.39 µs | 0.85 ± 0.33 µs |
-| seal throughput | ~1107 ± 24 MB/s | ~1479 ± 90 MB/s |
-| open throughput | ~1201 ± 8 MB/s | ~1076 ± 38 MB/s |
+| seal latency | 0.91 +/- 0.62 us | 0.65 +/- 0.42 us |
+| open latency | 0.86 +/- 0.39 us | 0.85 +/- 0.33 us |
+| seal throughput | ~1107 +/- 24 MB/s | ~1479 +/- 90 MB/s |
+| open throughput | ~1201 +/- 8 MB/s | ~1076 +/- 38 MB/s |
 
 ![v1 vs v2 performance](performance/chart.png)
 
